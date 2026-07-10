@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduAdapt AI - Hệ thống quản lý & Đánh giá</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #1a73e8; --secondary: #6c63ff; --success: #28a745; --danger: #dc3545; --gray: #f8f9fa; --dark: #212529; }
+        body { font-family: 'Roboto', sans-serif; margin: 0; background: #f0f2f5; color: var(--dark); }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+        .card { background: white; border-radius: 12px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        
+        /* Auth & Nav */
+        .hidden { display: none; }
+        input, select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 6px; }
+        .btn { padding: 12px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-primary { background: var(--primary); color: white; width: 100%; }
+        .btn-add { background: var(--success); color: white; width: auto; margin-top: 10px; }
+        
+        /* Table */
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th, td { border: 1px solid #eee; padding: 12px; text-align: left; }
+        th { background: var(--gray); color: var(--primary); }
+        .status-done { color: var(--success); font-weight: bold; }
+        .status-wait { color: #999; font-style: italic; }
+
+        /* Dashboard Stats */
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-item { padding: 20px; border-radius: 10px; text-align: center; color: white; }
+        
+        .section-title { border-left: 5px solid var(--primary); padding-left: 15px; margin: 25px 0 15px; color: var(--primary); }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 1. ĐĂNG NHẬP / ĐĂNG KÝ -->
+    <div id="auth-page" class="auth-container" style="max-width: 400px; margin: 50px auto;">
+        <div class="card">
+            <h2 style="text-align: center; color: var(--primary);">EDUADAPT AI</h2>
+            <div id="login-form">
+                <select id="login-role">
+                    <option value="student">Học sinh</option>
+                    <option value="teacher">Giáo viên</option>
+                </select>
+                <input type="text" id="user-fullname" placeholder="Họ và tên">
+                <input type="password" id="user-pass" placeholder="Mật khẩu">
+                <button class="btn btn-primary" onclick="handleLogin()">VÀO HỆ THỐNG</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. TRANG CHỦ HỌC SINH -->
+    <div id="student-home" class="hidden">
+        <div class="card" style="text-align: center;">
+            <h1>Chào mừng, <span id="display-name"></span>!</h1>
+            <p>Hệ thống đánh giá mức độ thích nghi GDPT 2018</p>
+            <button class="btn btn-primary" style="width: auto;" onclick="showPage('survey-page')">BẮT ĐẦU KHẢO SÁT</button>
+            <button class="btn" onclick="logout()">Đăng xuất</button>
+        </div>
+    </div>
+
+    <!-- 3. KHẢO SÁT -->
+    <div id="survey-page" class="hidden">
+        <div class="card">
+            <h2>BỘ CÂU HỎI KHẢO SÁT</h2>
+            <div id="survey-questions"></div>
+            <button class="btn btn-primary" onclick="submitSurvey()">HOÀN THÀNH KHẢO SÁT</button>
+        </div>
+    </div>
+
+    <!-- 4. KẾT QUẢ HỌC SINH -->
+    <div id="result-page" class="hidden">
+        <div class="card" style="text-align: center;">
+            <h2>KẾT QUẢ CỦA BẠN</h2>
+            <div style="font-size: 50px; font-weight: bold; color: var(--primary);" id="my-score">0</div>
+            <p id="my-level"></p>
+            <div style="max-width: 400px; margin: auto;"><canvas id="myChart"></canvas></div>
+            <button class="btn btn-primary" style="width: auto; margin-top: 20px;" onclick="logout()">Đăng xuất</button>
+        </div>
+    </div>
+
+    <!-- 5. DASHBOARD GIÁO VIÊN -->
+    <div id="teacher-dashboard" class="hidden">
+        <div class="flex-between">
+            <h2>DASHBOARD GIÁO VIÊN</h2>
+            <button class="btn" onclick="logout()">Đăng xuất</button>
+        </div>
+
+        <!-- Thống kê tổng quát -->
+        <div class="stat-grid">
+            <div class="stat-item" style="background: var(--primary);">
+                <h3 id="stat-total-hs">0</h3><p>Học sinh trong lớp</p>
+            </div>
+            <div class="stat-item" style="background: var(--success);">
+                <h3 id="stat-avg-score">0</h3><p>AI Trung bình</p>
+            </div>
+            <div class="stat-item" style="background: var(--danger);">
+                <h3 id="stat-risk">0</h3><p>Học sinh nguy cơ</p>
+            </div>
+        </div>
+
+        <!-- Quản lý danh sách -->
+        <div class="card">
+            <h3 class="section-title">NHẬP DANH SÁCH LỚP</h3>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="new-student-name" placeholder="Nhập họ tên học sinh mới...">
+                <button class="btn btn-add" onclick="addStudentToList()">THÊM VÀO LỚP</button>
+            </div>
+        </div>
+
+        <!-- Bảng theo dõi -->
+        <div class="card">
+            <h3 class="section-title">DANH SÁCH THEO DÕI THÍCH NGHI</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>STT</th>
+                        <th>Họ và Tên</th>
+                        <th>Trạng thái</th>
+                        <th>AI Score</th>
+                        <th>Đánh giá</th>
+                        <th>Hành động</th>
+                    </tr>
+                </thead>
+                <tbody id="teacher-table-body">
+                    <!-- Dữ liệu sẽ đổ vào đây -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Dữ liệu giả lập lưu trong LocalStorage
+    let db = JSON.parse(localStorage.getItem('eduAdaptDB')) || {
+        students: [], // {name: '', score: null, data: [], status: 'Chưa làm'}
+    };
+
+    const surveySections = [
+        { id: 'A', title: 'Năng lực tự học', questions: ['Chủ động chuẩn bị bài', 'Tự tìm tài liệu ngoài SGK', 'Lập kế hoạch học tập', 'Tự đánh giá kết quả', 'Điều chỉnh phương pháp'] },
+        { id: 'B', title: 'Áp lực học tập', questions: ['Lo lắng về điểm số', 'Áp lực khi kiểm tra', 'Gia đình tạo áp lực', 'Khối lượng bài tập lớn', 'Mất ngủ trước kỳ thi'] },
+        { id: 'C', title: 'Quản lý thời gian', questions: ['Có thời khóa biểu', 'Ít bị xao nhãng', 'Hoàn thành bài đúng hạn', 'Cân bằng học/nghỉ', 'Không trì hoãn'] },
+        { id: 'D', title: 'Thích nghi phương pháp mới', questions: ['Thích học dự án', 'Tự tin thuyết trình', 'Thích làm việc nhóm', 'Dễ thích nghi cách mới', 'Tích cực trải nghiệm'] },
+        { id: 'E', title: 'Định hướng nghề nghiệp', questions: ['Hiểu điểm mạnh bản thân', 'Biết ngành mình thích', 'Có mục tiêu nghề nghiệp', 'Hiểu tổ hợp môn đã chọn', 'Có kế hoạch sau tốt nghiệp'] }
+    ];
+
+    let currentUser = null;
+
+    // 1. QUẢN LÝ ĐĂNG NHẬP
+    function handleLogin() {
+        const name = document.getElementById('user-fullname').value.trim();
+        const role = document.getElementById('login-role').value;
+
+        if (!name) return alert("Vui lòng nhập họ tên!");
+
+        currentUser = { name, role };
+        
+        if (role === 'teacher') {
+            showPage('teacher-dashboard');
+            renderTeacherData();
+        } else {
+            document.getElementById('display-name').innerText = name;
+            showPage('student-home');
+        }
+    }
+
+    function logout() {
+        location.reload();
+    }
+
+    function showPage(id) {
+        document.querySelectorAll('.container > div').forEach(d => d.classList.add('hidden'));
+        document.getElementById(id).classList.remove('hidden');
+    }
+
+    // 2. GIÁO VIÊN: THÊM HỌC SINH VÀO DANH SÁCH
+    function addStudentToList() {
+        const name = document.getElementById('new-student-name').value.trim();
+        if (!name) return;
+
+        // Kiểm tra trùng
+        if (db.students.find(s => s.name === name)) {
+            alert("Học sinh này đã có trong danh sách!");
+            return;
+        }
+
+        db.students.push({
+            name: name,
+            score: null,
+            details: [],
+            status: 'Chưa làm'
+        });
+
+        saveDB();
+        renderTeacherData();
+        document.getElementById('new-student-name').value = '';
+    }
+
+    function renderTeacherData() {
+        const tbody = document.getElementById('teacher-table-body');
+        tbody.innerHTML = '';
+        
+        let totalScore = 0;
+        let doneCount = 0;
+        let riskCount = 0;
+
+        db.students.forEach((s, index) => {
+            if (s.score) {
+                totalScore += parseFloat(s.score);
+                doneCount++;
+                if (s.score < 50) riskCount++;
+            }
+
+            tbody.innerHTML += `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${s.name}</td>
+                    <td class="${s.score ? 'status-done' : 'status-wait'}">${s.status}</td>
+                    <td>${s.score || '-'}</td>
+                    <td>${getRating(s.score)}</td>
+                    <td><button onclick="deleteStudent(${index})">Xóa</button></td>
+                </tr>
+            `;
+        });
+
+        // Cập nhật thống kê
+        document.getElementById('stat-total-hs').innerText = db.students.length;
+        document.getElementById('stat-avg-score').innerText = doneCount > 0 ? (totalScore / doneCount).toFixed(1) : 0;
+        document.getElementById('stat-risk').innerText = riskCount;
+    }
+
+    function deleteStudent(index) {
+        if(confirm("Xóa học sinh này?")) {
+            db.students.splice(index, 1);
+            saveDB();
+            renderTeacherData();
+        }
+    }
+
+    // 3. HỌC SINH: LÀM KHẢO SÁT
+    function initSurvey() {
+        const container = document.getElementById('survey-questions');
+        surveySections.forEach(sec => {
+            let html = `<h3 class="section-title">PHẦN ${sec.id}: ${sec.title}</h3><table>`;
+            sec.questions.forEach((q, i) => {
+                html += `<tr><td>${q}</td><td>
+                    <div style="display:flex; gap:10px;">
+                        ${[1,2,3,4,5].map(v => `<label><input type="radio" name="${sec.id}${i}" value="${v}" required> ${v}</label>`).join('')}
+                    </div>
+                </td></tr>`;
+            });
+            container.innerHTML += html + `</table>`;
+        });
+    }
+
+    function submitSurvey() {
+        let sectionScores = [];
+        let totalPoints = 0;
+
+        for (let sec of surveySections) {
+            let secSum = 0;
+            for (let i = 0; i < sec.questions.length; i++) {
+                const val = document.querySelector(`input[name="${sec.id}${i}"]:checked`);
+                if (!val) return alert("Vui lòng trả lời hết các câu hỏi!");
+                secSum += parseInt(val.value);
+            }
+            sectionScores.push((secSum / 25) * 100);
+            totalPoints += secSum;
+        }
+
+        const finalScore = ((totalPoints / 125) * 100).toFixed(1);
+
+        // Cập nhật vào DB nếu tên học sinh khớp
+        const studentIdx = db.students.findIndex(s => s.name === currentUser.name);
+        if (studentIdx !== -1) {
+            db.students[studentIdx].score = finalScore;
+            db.students[studentIdx].status = 'Đã hoàn thành';
+            db.students[studentIdx].details = sectionScores;
+        } else {
+            // Nếu giáo viên chưa nhập tên nhưng HS vẫn làm, tự thêm vào
+            db.students.push({
+                name: currentUser.name,
+                score: finalScore,
+                status: 'Đã hoàn thành',
+                details: sectionScores
+            });
+        }
+
+        saveDB();
+        showResult(finalScore, sectionScores);
+    }
+
+    function showResult(score, details) {
+        showPage('result-page');
+        document.getElementById('my-score').innerText = score;
+        document.getElementById('my-level').innerText = "Mức độ: " + getRating(score);
+
+        const ctx = document.getElementById('myChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['Tự học', 'Áp lực', 'Thời gian', 'Thích nghi', 'Nghề nghiệp'],
+                datasets: [{
+                    label: 'Điểm của bạn',
+                    data: details,
+                    backgroundColor: 'rgba(26, 115, 232, 0.2)',
+                    borderColor: 'rgba(26, 115, 232, 1)'
+                }]
+            },
+            options: { scales: { r: { beginAtZero: true, max: 100 } } }
+        });
+    }
+
+    // UTILS
+    function getRating(score) {
+        if (!score) return "-";
+        if (score >= 80) return "Rất tốt";
+        if (score >= 65) return "Tốt";
+        if (score >= 50) return "Trung bình";
+        return "Cần hỗ trợ gấp";
+    }
+
+    function saveDB() {
+        localStorage.setItem('eduAdaptDB', JSON.stringify(db));
+    }
+
+    window.onload = initSurvey;
+</script>
+
+</body>
+</html>
